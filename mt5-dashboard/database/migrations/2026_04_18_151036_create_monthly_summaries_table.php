@@ -18,12 +18,14 @@ return new class extends Migration
             $table->integer('month');
             $table->decimal('total_drawdown', 15, 2)->default(0);
             $table->decimal('max_drawdown', 15, 2)->default(0);
-            $table->integer('total_drawdown_events')->default(0);
-            $table->decimal('total_lots_traded', 10, 4)->default(0);
             $table->integer('total_martingle_cycles')->default(0);
+            $table->decimal('total_lots_traded', 10, 4)->default(0);
+            $table->integer('total_trades')->default(0);
+            $table->json('daily_breakdown')->nullable();
             $table->timestamps();
             
-            $table->unique(['ea_name', 'year', 'month']);
+            $table->unique(['year', 'month', 'ea_name']);
+            $table->index(['year', 'month']);
         });
     }
 

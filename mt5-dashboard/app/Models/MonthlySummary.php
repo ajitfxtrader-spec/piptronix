@@ -2,69 +2,43 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
+use Carbon\Carbon;
 
 class MonthlySummary extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'ea_name',
         'year',
         'month',
         'total_drawdown',
         'max_drawdown',
-        'total_drawdown_events',
-        'total_lots_traded',
         'total_martingle_cycles',
+        'total_lots_traded',
+        'total_trades',
+        'daily_breakdown',
     ];
 
     protected $casts = [
+        'year' => 'integer',
+        'month' => 'integer',
         'total_drawdown' => 'decimal:2',
         'max_drawdown' => 'decimal:2',
+        'total_martingle_cycles' => 'integer',
         'total_lots_traded' => 'decimal:4',
+        'total_trades' => 'integer',
+        'daily_breakdown' => 'array',
     ];
 
-    /**
-     * Get or create monthly summary for EA
-     */
-    public static function getOrCreate($eaName, $year, $month)
+    public function scopeCurrentMonth(Builder $query): Builder
     {
-        return self::firstOrCreate(
-            [
-                'ea_name' => $eaName,
-                'year' => $year,
-                'month' => $month,
-            ],
-            [
-                'total_drawdown' => 0,
-                'max_drawdown' => 0,
-                'total_drawdown_events' => 0,
-                'total_lots_traded' => 0,
-                'total_martingle_cycles' => 0,
-            ]
-        );
+        return $query->whereYear('created_at', Carbon::now()->year)
+                     ->whereMonth('created_at', Carbon::now()->month);
     }
 
-    /**
-     * Update summary with new drawdown data
-     */
-    public function updateWithDrawdown($drawdownAmount, $lots, $martingleCycle)
+    public function scopeForPeriod(Builder $query, int $year, int $month): Builder
     {
-        $this->increment('total_drawdown_events');
-        $this->total_drawdown += $drawdownAmount;
-        
-        if ($drawdownAmount > $this->max_drawdown) {
-            $this->max_drawdown = $drawdownAmount;
-        }
-        
-        $this->total_lots_traded += $lots;
-        
-        if ($martingleCycle > 0) {
-            $this->total_martingle_cycles += $martingleCycle;
-        }
-        
-        $this->save();
+        return $query->where('year', $year)->where('month', $month);
     }
 }

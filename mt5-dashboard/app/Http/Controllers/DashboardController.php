@@ -6,97 +6,64 @@ use App\Models\Drawdown;
 use App\Models\MonthlySummary;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     /**
-     * Display the main dashboard
+     * Display the dashboard with top 10 drawdowns and current month stats
      */
-    public function index(Request $request)
+    public function index()
     {
-        $eaName = $request->input('ea_name');
+        $top10Drawdowns = Drawdown::top10Largest()->get();
         
-        // Get top 10 largest drawdowns (largest first)
-        $top10Drawdowns = Drawdown::getTop10Largest();
+        $currentMonth = Carbon::now();
+        $monthlyStats = Drawdown::currentMonth()
+            ->select(
+                DB::raw('SUM(drawdown_amount) as total_drawdown'),
+                DB::raw('MAX(drawdown_amount) as max_single_drawdown'),
+                DB::raw('SUM(martingle_cycle) as total_martingle_cycles'),
+                DB::raw('SUM(total_lots) as total_lots'),
+                DB::raw('COUNT(*) as total_events')
+            )
+            ->first();
         
-        // Get current month total drawdown
-        $currentMonthTotal = Drawdown::getCurrentMonthTotal($eaName);
-        
-        // Get current month events with details
-        $currentMonthEvents = Drawdown::getCurrentMonthEvents($eaName);
-        
-        // Get monthly summary
-        $currentYear = Carbon::now()->year;
-        $currentMonth = Carbon::now()->month;
-        $monthlySummary = null;
-        
-        if ($eaName) {
-            $monthlySummary = MonthlySummary::where('ea_name', $eaName)
-                ->where('year', $currentYear)
-                ->where('month', $currentMonth)
-                ->first();
-        }
-        
-        // Calculate statistics
-        $stats = [
-            'current_month_total' => $currentMonthTotal,
-            'current_month_events' => $currentMonthEvents->count(),
-            'avg_drawdown' => $currentMonthEvents->count() > 0 
-                ? $currentMonthTotal / $currentMonthEvents->count() 
-                : 0,
-            'max_drawdown_this_month' => $currentMonthEvents->max('drawdown_amount') ?? 0,
-            'total_lots_this_month' => $currentMonthEvents->sum('total_lots'),
-            'total_martingle_cycles_this_month' => $currentMonthEvents->sum('martingle_cycle'),
-        ];
-        
-        return view('dashboard.index', compact(
-            'top10Drawdowns',
-            'currentMonthTotal',
-            'currentMonthEvents',
-            'monthlySummary',
-            'stats',
-            'eaName'
-        ));
+        return view('dashboard', [
+            'top10Drawdowns' => $top10Drawdowns,
+            'monthlyStats' => $monthlyStats,
+            'currentMonth' => $currentMonth->format('F Y'),
+        ]);
     }
 
     /**
-     * API endpoint to receive drawdown data from MT5 EA
+     * Store a new drawdown event from MT5 EA
      */
-    public function storeDrawdown(Request $request)
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'ea_name' => 'nullable|string|max:255',
-            'symbol' => 'nullable|string|max:20',
+            'symbol' => 'required|string|max:20',
+            'event_date' => 'required|date',
+            'balance' => 'required|numeric|min:0',
+            'equity' => 'required|numeric|min:0',
             'drawdown_amount' => 'required|numeric|min:0',
-            'balance_before' => 'required|numeric',
-            'balance_after' => 'required|numeric',
-            'equity_low' => 'required|numeric',
+            'drawdown_percent' => 'required|numeric|min:0|max:100',
             'martingle_cycle' => 'integer|min:0',
-            'current_lot' => 'required|numeric|min:0',
-            'total_lots' => 'required|numeric|min:0',
-            'total_trades_in_cycle' => 'integer|min:0',
-            'start_time' => 'required|date',
-            'end_time' => 'nullable|date',
-            'status' => 'in:open,closed',
+            'current_lot' => 'numeric|min:0',
+            'total_lots' => 'numeric|min:0',
+            'order_type' => 'nullable|string|max:50',
+            'ticket' => 'nullable|integer',
+            'extra_data' => 'nullable|array',
         ]);
 
         $drawdown = Drawdown::create($validated);
 
         // Update monthly summary
-        $startTime = Carbon::parse($validated['start_time']);
-        $summary = MonthlySummary::getOrCreate(
-            $validated['ea_name'] ?? 'Unknown',
-            $startTime->year,
-            $startTime->month
-        );
-        
-        if ($validated['status'] === 'closed') {
-            $summary->updateWithDrawdown(
-                $validated['drawdown_amount'],
-                $validated['total_lots'],
-                $validated['martingle_cycle']
-            );
-        }
+        $eventDate = Carbon::parse($validated['event_date']);
+        $this->updateMonthlySummary($eventDate, $validated);
+
+        // Broadcast real-time update
+        broadcast(new \App\Events\DrawdownUpdated($drawdown))->toOthers();
 
         return response()->json([
             'success' => true,
@@ -106,11 +73,11 @@ class DashboardController extends Controller
     }
 
     /**
-     * API endpoint to get top 10 drawdowns
+     * Get top 10 largest drawdowns (API endpoint)
      */
-    public function getTop10()
+    public function top10()
     {
-        $drawdowns = Drawdown::getTop10Largest();
+        $drawdowns = Drawdown::top10Largest()->get();
         
         return response()->json([
             'success' => true,
@@ -119,24 +86,98 @@ class DashboardController extends Controller
     }
 
     /**
-     * API endpoint to get current month summary
+     * Get current month statistics (API endpoint)
      */
-    public function getCurrentMonthSummary(Request $request)
+    public function currentMonth()
     {
-        $eaName = $request->input('ea_name');
+        $currentMonth = Carbon::now();
         
-        $total = Drawdown::getCurrentMonthTotal($eaName);
-        $events = Drawdown::getCurrentMonthEvents($eaName);
+        $stats = Drawdown::currentMonth()
+            ->select(
+                DB::raw('SUM(drawdown_amount) as total_drawdown'),
+                DB::raw('MAX(drawdown_amount) as max_single_drawdown'),
+                DB::raw('SUM(martingle_cycle) as total_martingle_cycles'),
+                DB::raw('SUM(total_lots) as total_lots'),
+                DB::raw('COUNT(*) as total_events'),
+                DB::raw('AVG(drawdown_percent) as avg_drawdown_percent')
+            )
+            ->first();
         
         return response()->json([
             'success' => true,
-            'data' => [
-                'year' => Carbon::now()->year,
-                'month' => Carbon::now()->month,
-                'total_drawdown' => $total,
-                'total_events' => $events->count(),
-                'events' => $events,
-            ],
+            'month' => $currentMonth->format('F Y'),
+            'data' => $stats,
         ]);
+    }
+
+    /**
+     * Get all drawdowns with pagination (API endpoint)
+     */
+    public function all(Request $request)
+    {
+        $perPage = $request->get('per_page', 50);
+        
+        $drawdowns = Drawdown::orderBy('event_date', 'desc')
+            ->paginate($perPage);
+        
+        return response()->json([
+            'success' => true,
+            'data' => $drawdowns,
+        ]);
+    }
+
+    /**
+     * Update or create monthly summary
+     */
+    private function updateMonthlySummary(Carbon $date, array $data)
+    {
+        $year = $date->year;
+        $month = $date->month;
+        $eaName = $data['ea_name'] ?? 'Unknown';
+
+        $summary = MonthlySummary::forPeriod($year, $month)
+            ->where('ea_name', $eaName)
+            ->first();
+
+        if (!$summary) {
+            $summary = new MonthlySummary();
+            $summary->ea_name = $eaName;
+            $summary->year = $year;
+            $summary->month = $month;
+            $summary->total_drawdown = 0;
+            $summary->max_drawdown = 0;
+            $summary->total_martingle_cycles = 0;
+            $summary->total_lots_traded = 0;
+            $summary->total_trades = 0;
+            $summary->daily_breakdown = [];
+        }
+
+        $summary->total_drawdown += $data['drawdown_amount'];
+        $summary->max_drawdown = max($summary->max_drawdown, $data['drawdown_amount']);
+        $summary->total_martingle_cycles += ($data['martingle_cycle'] ?? 0);
+        $summary->total_lots_traded += ($data['total_lots'] ?? 0);
+        $summary->total_trades += 1;
+
+        // Update daily breakdown
+        $dayKey = $date->format('Y-m-d');
+        $dailyBreakdown = $summary->daily_breakdown ?? [];
+        
+        if (!isset($dailyBreakdown[$dayKey])) {
+            $dailyBreakdown[$dayKey] = [
+                'count' => 0,
+                'total_drawdown' => 0,
+                'max_drawdown' => 0,
+            ];
+        }
+        
+        $dailyBreakdown[$dayKey]['count'] += 1;
+        $dailyBreakdown[$dayKey]['total_drawdown'] += $data['drawdown_amount'];
+        $dailyBreakdown[$dayKey]['max_drawdown'] = max(
+            $dailyBreakdown[$dayKey]['max_drawdown'], 
+            $data['drawdown_amount']
+        );
+        
+        $summary->daily_breakdown = $dailyBreakdown;
+        $summary->save();
     }
 }

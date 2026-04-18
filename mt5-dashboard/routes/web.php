@@ -1,33 +1,14 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
+use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-*/
+Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
+// API routes for MT5 EA and frontend
 Route::prefix('api')->group(function () {
-    // Endpoint for MT5 EA to send drawdown data
-    Route::post('/drawdown', [DashboardController::class, 'storeDrawdown'])
-        ->name('api.drawdown.store');
-    
-    // Get top 10 largest drawdowns
-    Route::get('/drawdowns/top-10', [DashboardController::class, 'getTop10'])
-        ->name('api.drawdowns.top10');
-    
-    // Get current month summary
-    Route::get('/drawdowns/current-month', [DashboardController::class, 'getCurrentMonthSummary'])
-        ->name('api.drawdowns.current-month');
+    Route::post('/drawdown', [DashboardController::class, 'store'])->name('api.drawdown.store');
+    Route::get('/drawdowns/top-10', [DashboardController::class, 'top10'])->name('api.drawdowns.top10');
+    Route::get('/drawdowns/current-month', [DashboardController::class, 'currentMonth'])->name('api.drawdowns.current-month');
+    Route::get('/drawdowns/all', [DashboardController::class, 'all'])->name('api.drawdowns.all');
 });
-
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-*/
-
-Route::get('/', [DashboardController::class, 'index'])
-    ->name('dashboard.index');

@@ -2,104 +2,53 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
 
 class Drawdown extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'ea_name',
         'symbol',
+        'event_date',
+        'balance',
+        'equity',
         'drawdown_amount',
-        'balance_before',
-        'balance_after',
-        'equity_low',
+        'drawdown_percent',
         'martingle_cycle',
         'current_lot',
         'total_lots',
-        'total_trades_in_cycle',
-        'start_time',
-        'end_time',
-        'status',
+        'order_type',
+        'ticket',
+        'extra_data',
     ];
 
     protected $casts = [
+        'event_date' => 'datetime',
+        'balance' => 'decimal:2',
+        'equity' => 'decimal:2',
         'drawdown_amount' => 'decimal:2',
-        'balance_before' => 'decimal:2',
-        'balance_after' => 'decimal:2',
-        'equity_low' => 'decimal:2',
+        'drawdown_percent' => 'decimal:4',
         'current_lot' => 'decimal:4',
         'total_lots' => 'decimal:4',
-        'start_time' => 'datetime',
-        'end_time' => 'datetime',
+        'extra_data' => 'array',
     ];
 
-    /**
-     * Get top 10 largest drawdowns ordered by amount (largest first)
-     */
-    public static function getTop10Largest()
+    public function scopeTop10Largest(Builder $query): Builder
     {
-        return self::where('status', 'closed')
-            ->orderBy('drawdown_amount', 'desc')
-            ->limit(10)
-            ->get();
+        return $query->orderBy('drawdown_amount', 'desc')->limit(10);
     }
 
-    /**
-     * Get total drawdown for current month in dollars
-     */
-    public static function getCurrentMonthTotal($eaName = null)
+    public function scopeCurrentMonth(Builder $query): Builder
     {
-        $query = self::where('status', 'closed')
-            ->whereYear('start_time', Carbon::now()->year)
-            ->whereMonth('start_time', Carbon::now()->month);
-        
-        if ($eaName) {
-            $query->where('ea_name', $eaName);
-        }
-        
-        return $query->sum('drawdown_amount');
+        return $query->whereYear('event_date', Carbon::now()->year)
+                     ->whereMonth('event_date', Carbon::now()->month);
     }
 
-    /**
-     * Get all drawdown events for current month with details
-     */
-    public static function getCurrentMonthEvents($eaName = null)
+    public function scopeForMonth(Builder $query, int $year, int $month): Builder
     {
-        $query = self::where('status', 'closed')
-            ->whereYear('start_time', Carbon::now()->year)
-            ->whereMonth('start_time', Carbon::now()->month)
-            ->orderBy('start_time', 'desc');
-        
-        if ($eaName) {
-            $query->where('ea_name', $eaName);
-        }
-        
-        return $query->get();
-    }
-
-    /**
-     * Scope to filter by current month
-     */
-    public function scopeCurrentMonth($query)
-    {
-        return $query->whereYear('start_time', Carbon::now()->year)
-            ->whereMonth('start_time', Carbon::now()->month);
-    }
-
-    /**
-     * Calculate martingle cycle details
-     */
-    public function getMartingleDetailsAttribute()
-    {
-        return [
-            'cycle_number' => $this->martingle_cycle,
-            'current_lot' => $this->current_lot,
-            'total_lots' => $this->total_lots,
-            'trades_in_cycle' => $this->total_trades_in_cycle,
-        ];
+        return $query->whereYear('event_date', $year)
+                     ->whereMonth('event_date', $month);
     }
 }
