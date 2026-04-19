@@ -1,39 +1,33 @@
-```
+```php
 # Dependency directories
 vendor/
-node_modules/
+composer.lock
 
-# Build and cache directories
-bootstrap/cache/
-storage/framework/cache/
-storage/framework/sessions/
-storage/framework/views/
-storage/app/public/
-storage/app/private/
-storage/app/
-
-# Environment specific
+# Environment specific files
 .env
 .env.local
 .env.*
 
-# IDE and editor files
+# Logs
+*.log
+storage/logs/
+
+# Cache
+bootstrap/cache/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/views/
+
+# Compiled files
+*.php~
+*.swp
+
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
+*.tmp
 
-# Logs
-storage/logs/
-*.log
-
-# OS generated files
+# OS
 .DS_Store
 Thumbs.db
-
-# PHP/Laravel specific
-.phpunit.result.cache
-.npm
-.yarn-integrity
-coverage/
 ```

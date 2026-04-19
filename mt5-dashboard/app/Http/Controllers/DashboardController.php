@@ -127,6 +127,42 @@ class DashboardController extends Controller
     }
 
     /**
+     * Get live trades (API endpoint)
+     */
+    public function liveTrades()
+    {
+        // This is a placeholder - in production, this would connect to MT5
+        // For now, return empty array or sample data
+        return response()->json([
+            'success' => true,
+            'data' => [],
+        ]);
+    }
+
+    /**
+     * Get trade history with date filter (API endpoint)
+     */
+    public function tradeHistory(Request $request)
+    {
+        $from = $request->get('from');
+        $to = $request->get('to');
+        
+        if (!$from || !$to) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide from and to dates',
+            ], 400);
+        }
+        
+        // This is a placeholder - in production, this would query MT5 closed orders
+        // For now, return empty array
+        return response()->json([
+            'success' => true,
+            'data' => [],
+        ]);
+    }
+
+    /**
      * Update or create monthly summary
      */
     private function updateMonthlySummary(Carbon $date, array $data)
