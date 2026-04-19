@@ -11,4 +11,8 @@ Route::prefix('api')->group(function () {
     Route::get('/drawdowns/top-10', [DashboardController::class, 'top10'])->name('api.drawdowns.top10');
     Route::get('/drawdowns/current-month', [DashboardController::class, 'currentMonth'])->name('api.drawdowns.current-month');
     Route::get('/drawdowns/all', [DashboardController::class, 'all'])->name('api.drawdowns.all');
+    
+    // Trade routes
+    Route::get('/trades/live', [DashboardController::class, 'liveTrades'])->name('api.trades.live');
+    Route::get('/trades/history', [DashboardController::class, 'tradeHistory'])->name('api.trades.history');
 });
